@@ -28,6 +28,8 @@ cargo run
 ./scripts/serve_web.sh
 ```
 
+如果 `web/` 缺少 `simple_tetris.wasm` 或 `mq_js_bundle.js`，脚本会自动先构建 release Web 资源。
+
 3. 浏览器打开：
 
 ```text
