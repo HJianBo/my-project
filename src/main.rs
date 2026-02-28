@@ -6,6 +6,10 @@ const BOARD_H: i32 = 20;
 const CELL: f32 = 28.0;
 const OFFSET_X: f32 = 40.0;
 const OFFSET_Y: f32 = 40.0;
+const HORIZONTAL_REPEAT_DELAY: f32 = 0.15;
+const HORIZONTAL_REPEAT_SLOW: f32 = 0.08;
+const HORIZONTAL_REPEAT_MEDIUM: f32 = 0.05;
+const HORIZONTAL_REPEAT_FAST: f32 = 0.03;
 
 const SHAPES: [[[(i32, i32); 4]; 4]; 7] = [
     // I
@@ -82,6 +86,9 @@ struct Game {
     active: Piece,
     drop_timer: f32,
     drop_interval: f32,
+    horizontal_dir: i32,
+    horizontal_hold_time: f32,
+    horizontal_repeat_timer: f32,
     score: u32,
     lines: u32,
     game_over: bool,
@@ -99,6 +106,9 @@ impl Game {
             },
             drop_timer: 0.0,
             drop_interval: 0.5,
+            horizontal_dir: 0,
+            horizontal_hold_time: 0.0,
+            horizontal_repeat_timer: 0.0,
             score: 0,
             lines: 0,
             game_over: false,
@@ -208,6 +218,55 @@ impl Game {
         self.drop_interval = (0.5 - self.lines as f32 * 0.01).max(0.1);
     }
 
+    fn horizontal_repeat_interval(hold_time: f32) -> f32 {
+        if hold_time >= 0.9 {
+            HORIZONTAL_REPEAT_FAST
+        } else if hold_time >= 0.4 {
+            HORIZONTAL_REPEAT_MEDIUM
+        } else {
+            HORIZONTAL_REPEAT_SLOW
+        }
+    }
+
+    fn update_horizontal_movement(&mut self, dt: f32) {
+        let dir = match (is_key_down(KeyCode::Left), is_key_down(KeyCode::Right)) {
+            (true, false) => -1,
+            (false, true) => 1,
+            _ => 0,
+        };
+
+        if dir == 0 {
+            self.horizontal_dir = 0;
+            self.horizontal_hold_time = 0.0;
+            self.horizontal_repeat_timer = 0.0;
+            return;
+        }
+
+        if dir != self.horizontal_dir {
+            self.horizontal_dir = dir;
+            self.horizontal_hold_time = 0.0;
+            self.horizontal_repeat_timer = 0.0;
+            self.try_move(dir, 0);
+            return;
+        }
+
+        self.horizontal_hold_time += dt;
+        if self.horizontal_hold_time < HORIZONTAL_REPEAT_DELAY {
+            return;
+        }
+
+        self.horizontal_repeat_timer += dt;
+        let held_after_delay = self.horizontal_hold_time - HORIZONTAL_REPEAT_DELAY;
+        let interval = Self::horizontal_repeat_interval(held_after_delay);
+
+        while self.horizontal_repeat_timer >= interval {
+            self.horizontal_repeat_timer -= interval;
+            if !self.try_move(dir, 0) {
+                break;
+            }
+        }
+    }
+
     fn update(&mut self) {
         if self.game_over {
             if is_key_pressed(KeyCode::R) {
@@ -216,12 +275,10 @@ impl Game {
             return;
         }
 
-        if is_key_pressed(KeyCode::Left) {
-            self.try_move(-1, 0);
-        }
-        if is_key_pressed(KeyCode::Right) {
-            self.try_move(1, 0);
-        }
+        let dt = get_frame_time();
+
+        self.update_horizontal_movement(dt);
+
         if is_key_pressed(KeyCode::Up) {
             self.try_rotate();
         }
@@ -232,7 +289,6 @@ impl Game {
             return;
         }
 
-        let dt = get_frame_time();
         self.drop_timer += if is_key_down(KeyCode::Down) {
             dt * 8.0
         } else {
