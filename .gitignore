@@ -1,1 +1,3 @@
 /target
+web/simple_tetris.wasm
+web/mq_js_bundle.js
